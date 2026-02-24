@@ -1,13 +1,12 @@
 import { useContext } from 'react';
 import { useForm } from 'react-hook-form'
 import { RecipeDataContext } from '../context/Context';
-import { nanoid } from 'nanoid';
 import { toast } from "react-toastify";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 const CreateRecipe = () => {
-  const { recipes, setrecipes } = useContext(RecipeDataContext);
+  const { createRecipe } = useContext(RecipeDataContext);
 
   const navigate = useNavigate();
   const {
@@ -17,7 +16,7 @@ const CreateRecipe = () => {
     formState: { errors, isSubmitting },
   } = useForm();
 
-  const inputData = (data) => {
+  const inputData = async (data) => {
     const ingredients = String(data.ingredients || "")
       .split(",")
       .map((item) => item.trim())
@@ -27,21 +26,21 @@ const CreateRecipe = () => {
       .map((item) => item.trim())
       .filter(Boolean);
 
-    const recipe = {
+    const recipeData = {
       ...data,
-      id: nanoid(),
       ingredients,
       instructions,
     };
 
-    const copy = [...recipes];
-    copy.push(recipe);
-    setrecipes(copy);
-
-    localStorage.setItem('recipe', JSON.stringify(copy));
-    toast.success("Recipe Added");
-    reset();
-    navigate("/recipe");
+    try {
+      await createRecipe(recipeData);
+      toast.success("Recipe Added");
+      reset();
+      navigate("/recipe");
+    } catch (error) {
+      toast.error("Failed to add recipe");
+      console.error(error);
+    }
   }
 
   return (

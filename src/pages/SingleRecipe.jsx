@@ -8,13 +8,10 @@ import { Heart, Trash2, ArrowLeft, ChefHat } from "lucide-react";
 
 const SingleRecipe = () => {
   const navigate = useNavigate();
-  const { recipes, setrecipes } = useContext(RecipeDataContext)
+  const { recipes, updateRecipe, deleteRecipe, toggleFavorite, loading } = useContext(RecipeDataContext)
   const params = useParams();
-  const recipe = recipes.find((re) => params.id === re.id);
+  const recipe = recipes.find((re) => params.id === String(re.id || re._id));
 
-  const [favor, setfavor] = useState(
-    JSON.parse(localStorage.getItem('fav')) || []
-  )
   const [imgError, setImgError] = useState(false)
 
   const {
@@ -49,9 +46,8 @@ const SingleRecipe = () => {
     });
   }, [recipe, reset]);
 
-  const submitHandeler = (re) => {
-    const indx = recipes.findIndex((reci) => params.id === reci.id);
-    if (indx === -1) {
+  const submitHandeler = async (re) => {
+    if (!recipe) {
       toast.error("Recipe not found");
       return;
     }
@@ -65,48 +61,69 @@ const SingleRecipe = () => {
       .map((item) => item.trim())
       .filter(Boolean);
 
-    re.id = params.id;
-    const copyData = [...recipes];
-    copyData[indx] = { ...copyData[indx], ...re, ingredients, instructions };
-    setrecipes(copyData);
-    localStorage.setItem('recipe', JSON.stringify(copyData));
-    toast.success("Recipe Updated Successfully!")
+    try {
+      await updateRecipe(recipe.id || recipe._id, {
+        ...re,
+        ingredients,
+        instructions,
+      });
+      toast.success("Recipe Updated Successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update recipe");
+    }
   }
 
-  const deleteRecipe = () => {
+  const onDeleteRecipe = async () => {
     if (!window.confirm("Are you sure you want to delete this recipe?")) return;
 
-    const data = recipes.filter((r) => r.id !== params.id);
-    setrecipes(data);
-    localStorage.setItem('recipe', JSON.stringify(data));
-
-    const newFav = favor.filter((f) => f.id !== params.id);
-    setfavor(newFav);
-    localStorage.setItem("fav", JSON.stringify(newFav));
-
-    navigate("/recipe");
-    toast.warn("Recipe Deleted")
+    try {
+      await deleteRecipe(recipe.id || recipe._id);
+      navigate("/recipe");
+      toast.warn("Recipe Deleted");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete recipe");
+    }
   }
 
-  const addFav = () => {
+  const addFav = async () => {
     if (!recipe) return;
-    if (favor.some((f) => f.id === recipe.id)) return;
-
-    const newFav = [...favor, recipe];
-    setfavor(newFav);
-    localStorage.setItem("fav", JSON.stringify(newFav));
-    toast.success("Added to favorites");
+    if (recipe.isFavorite) return;
+    try {
+      await toggleFavorite(recipe.id || recipe._id);
+      toast.success("Added to favorites");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update favorite");
+    }
   }
 
-  const removeFav = () => {
-    const newfav = favor.filter((f) => f.id !== recipe?.id);
-    setfavor(newfav)
-    localStorage.setItem("fav", JSON.stringify(newfav));
-    toast.info("Removed from favorites");
+  const removeFav = async () => {
+    if (!recipe) return;
+    if (!recipe.isFavorite) return;
+    try {
+      await toggleFavorite(recipe.id || recipe._id);
+      toast.info("Removed from favorites");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update favorite");
+    }
   }
 
-  const isFav = favor.find((f) => f.id === recipe?.id);
+  const isFav = Boolean(recipe?.isFavorite);
   const handleImageError = () => setImgError(true);
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[50vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+          <p className="text-slate-300">Loading recipe...</p>
+        </div>
+      </div>
+    );
+  }
 
   return recipe ? (
     <motion.div
@@ -276,7 +293,7 @@ const SingleRecipe = () => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="button"
-                onClick={deleteRecipe}
+                onClick={onDeleteRecipe}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-500 transition"
               >
                 <Trash2 className="w-4 h-4" />

@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import { useContext } from 'react';
 import RecipeCard from '../componenets/RecipeCard';
 import { motion } from 'framer-motion';
+import { RecipeDataContext } from '../context/Context';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -11,13 +13,25 @@ const containerVariants = {
 };
 
 const Fav = () => {
-  const flavor = JSON.parse(localStorage.getItem('fav')) || [];
+  const { recipes, loading } = useContext(RecipeDataContext);
+  const flavor = recipes.filter((recipe) => recipe.isFavorite);
 
   const renderRecipe = flavor.length > 0 ? (flavor.map((recipe) => {
     return (
-      <RecipeCard recipe={recipe} key={recipe.id} />
+      <RecipeCard recipe={recipe} key={recipe.id || recipe._id} />
     )
   })) : "Not happen"
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[50vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+          <p className="text-slate-300">Loading favorites...</p>
+        </div>
+      </div>
+    );
+  }
 
   return flavor.length !== 0 ? (
     <div className="space-y-5">
@@ -36,7 +50,7 @@ const Fav = () => {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
       >
         {renderRecipe}
       </motion.section>

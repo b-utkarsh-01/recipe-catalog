@@ -1,76 +1,90 @@
 import { useState, useEffect } from "react";
 import { RecipeDataContext } from "./Context";
 
+// Use same-origin API path by default so Docker/K8s ingress and nginx proxy both work.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/recipe";
+
+// Reusable API service functions for better maintainability
+const recipeAPI = {
+  // Fetch all recipes
+  getAll: async () => {
+    const response = await fetch(API_BASE_URL);
+    if (!response.ok) throw new Error("Failed to fetch recipes");
+    return response.json();
+  },
+
+  // Create a new recipe
+  create: async (recipeData) => {
+    const response = await fetch(`${API_BASE_URL}/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(recipeData),
+    });
+    if (!response.ok) throw new Error("Failed to create recipe");
+    return response.json();
+  },
+
+  // Get single recipe by ID
+  getById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/${id}`);
+    if (!response.ok) throw new Error("Failed to fetch recipe");
+    return response.json();
+  },
+
+  // Update recipe
+  update: async (id, recipeData) => {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(recipeData),
+    });
+    if (!response.ok) throw new Error("Failed to update recipe");
+    return response.json();
+  },
+
+  // Delete recipe
+  delete: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("Failed to delete recipe");
+    return response.json();
+  },
+
+  // Toggle favorite
+  toggleFavorite: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/${id}/favorite`, {
+      method: "PATCH",
+    });
+    if (!response.ok) throw new Error("Failed to toggle favorite");
+    return response.json();
+  },
+};
+
+const normalizeRecipe = (recipe) => ({
+  ...recipe,
+  id: recipe?.id || recipe?._id,
+});
+
+const normalizeRecipes = (data) =>
+  Array.isArray(data) ? data.map(normalizeRecipe) : [];
+
 const RecipeContext = (props) => {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch recipes from backend on mount
   useEffect(() => {
     const fetchRecipes = async () => {
       try {
-        // First, get local storage data
-        let localRecipes = [];
-        try {
-          const stored = JSON.parse(localStorage.getItem("recipe"));
-          localRecipes = Array.isArray(stored) ? stored : [];
-        } catch {
-          localRecipes = [];
-        }
-
-        // Fetch from new API
-        const response = await fetch('https://recipe-api.com/api/v1/dinner');
-        const apiData = await response.json();
-
-        // Transform API data to match app format - handle complex nested structure from new API
-        const transformedApiRecipes = apiData.map((item) => {
-          // Extract ingredient names from complex nested structure
-          let ingredientsList = [];
-          if (item.ingredients && Array.isArray(item.ingredients)) {
-            item.ingredients.forEach(group => {
-              if (group.items && Array.isArray(group.items)) {
-                group.items.forEach(ing => {
-                  if (ing.name) {
-                    ingredientsList.push(ing.name);
-                  }
-                });
-              }
-            });
-          }
-
-          // Extract instruction texts from complex nested structure
-          let instructionsList = [];
-          if (item.instructions && Array.isArray(item.instructions)) {
-            item.instructions.forEach(step => {
-              if (step.text) {
-                instructionsList.push(step.text);
-              }
-            });
-          }
-
-          return {
-            id: item.id,
-            name: item.name || "Untitled Recipe",
-            chef: item.cuisine || "Unknown Chef",
-            image: "",
-            description: item.description || "",
-            difficulty: item.difficulty || "",
-            cuisine: item.cuisine || "",
-            tags: [],
-            mealType: "Dinner",
-            fromApi: true,
-          };
-        });
-
-        // Merge: local recipes first, then API recipes
-        const allRecipes = [...localRecipes, ...transformedApiRecipes];
-        setRecipes(allRecipes);
-        localStorage.setItem("recipe", JSON.stringify(localRecipes));
+        const data = await recipeAPI.getAll();
+        setRecipes(normalizeRecipes(data));
       } catch (error) {
         console.error("Error fetching recipes:", error);
-        // Fallback to local storage only
+        // Fallback to local storage if backend is not available
         try {
           const stored = JSON.parse(localStorage.getItem("recipe"));
-          setRecipes(Array.isArray(stored) ? stored : []);
+          setRecipes(normalizeRecipes(stored));
         } catch {
           setRecipes([]);
         }
@@ -82,15 +96,72 @@ const RecipeContext = (props) => {
     fetchRecipes();
   }, []);
 
+  // Create new recipe
+  const createRecipe = async (recipeData) => {
+    const newRecipe = await recipeAPI.create(recipeData);
+    const normalized = normalizeRecipe(newRecipe);
+    setRecipes((prev) => [...prev, normalized]);
+    return normalized;
+  };
+
+  // Update existing recipe
+  const updateRecipe = async (id, recipeData) => {
+    const updatedRecipe = await recipeAPI.update(id, recipeData);
+    const normalized = normalizeRecipe(updatedRecipe);
+    setRecipes((prev) =>
+      prev.map((r) => (r.id === id ? normalized : r))
+    );
+    return normalized;
+  };
+
+  // Delete recipe
+  const deleteRecipe = async (id) => {
+    await recipeAPI.delete(id);
+    setRecipes((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Toggle favorite
+  const toggleFavorite = async (id) => {
+    try {
+      const updatedRecipe = await recipeAPI.toggleFavorite(id);
+      const normalized = normalizeRecipe(updatedRecipe);
+      setRecipes((prev) =>
+        prev.map((r) => (r.id === id ? normalized : r))
+      );
+      return normalized;
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      // Fallback to local toggle
+      setRecipes((prev) =>
+        prev.map((r) => {
+          if (r.id === id) {
+            return { ...r, isFavorite: !r.isFavorite };
+          }
+          return r;
+        })
+      );
+    }
+  };
+
+  // Keep for backward compatibility
   const setrecipes = (newRecipes) => {
-    setRecipes(newRecipes);
-    // Save to local storage (excluding API data, only user created)
-    const userRecipes = newRecipes.filter(r => !r.fromApi);
-    localStorage.setItem("recipe", JSON.stringify(userRecipes));
+    const normalized = normalizeRecipes(newRecipes);
+    setRecipes(normalized);
+    localStorage.setItem("recipe", JSON.stringify(normalized));
   };
 
   return (
-    <RecipeDataContext.Provider value={{ recipes, setrecipes, loading }}>
+    <RecipeDataContext.Provider
+      value={{
+        recipes,
+        setrecipes,
+        loading,
+        createRecipe,
+        updateRecipe,
+        deleteRecipe,
+        toggleFavorite,
+      }}
+    >
       {props.children}
     </RecipeDataContext.Provider>
   );

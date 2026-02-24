@@ -12,17 +12,12 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
-};
-
 const Recipe = () => {
   const { recipes, loading } = useContext(RecipeDataContext);
 
   const renderRecipe = recipes ? (recipes.map((recipe) => {
     return (
-      <RecipeCard recipe={recipe} key={recipe.id} />
+      <RecipeCard recipe={recipe} key={recipe.id || recipe._id} />
     )
   })) : "Not happen"
 
@@ -65,7 +60,7 @@ const Recipe = () => {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
       >
         {renderRecipe}
       </motion.section>
