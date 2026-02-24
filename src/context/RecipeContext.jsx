@@ -1,62 +1,78 @@
 import { useState, useEffect } from "react";
 import { RecipeDataContext } from "./Context";
 
-// Use same-origin API path by default so Docker/K8s ingress and nginx proxy both work.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/recipe";
+const ENV_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const PROD_FALLBACK_API_BASE_URL = "https://recipe-catalog-backend.onrender.com/api/recipe";
+
+// If env is missing in deployed frontend, use Render URL in production; keep relative API for local/docker.
+const API_BASE_URL = (
+  ENV_API_BASE_URL ||
+  (import.meta.env.PROD ? PROD_FALLBACK_API_BASE_URL : "/api/recipe")
+).replace(/\/+$/, "");
+
+const apiUrl = (path = "") => `${API_BASE_URL}${path}`;
+
+const assertOk = async (response, message) => {
+  if (response.ok) return;
+  const body = await response.text().catch(() => "");
+  throw new Error(
+    `${message} (status: ${response.status}, url: ${response.url})${body ? `, body: ${body}` : ""}`
+  );
+};
 
 // Reusable API service functions for better maintainability
 const recipeAPI = {
   // Fetch all recipes
   getAll: async () => {
-    const response = await fetch(API_BASE_URL);
-    if (!response.ok) throw new Error("Failed to fetch recipes");
+    const response = await fetch(apiUrl());
+    await assertOk(response, "Failed to fetch recipes");
     return response.json();
   },
 
   // Create a new recipe
   create: async (recipeData) => {
-    const response = await fetch(`${API_BASE_URL}/create`, {
+    const response = await fetch(apiUrl("/create"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(recipeData),
     });
-    if (!response.ok) throw new Error("Failed to create recipe");
+    await assertOk(response, "Failed to create recipe");
     return response.json();
   },
 
   // Get single recipe by ID
   getById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/${id}`);
-    if (!response.ok) throw new Error("Failed to fetch recipe");
+    const response = await fetch(apiUrl(`/${id}`));
+    await assertOk(response, "Failed to fetch recipe");
     return response.json();
   },
 
   // Update recipe
   update: async (id, recipeData) => {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
+    const response = await fetch(apiUrl(`/${id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(recipeData),
     });
-    if (!response.ok) throw new Error("Failed to update recipe");
+    await assertOk(response, "Failed to update recipe");
     return response.json();
   },
 
   // Delete recipe
   delete: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
+    const response = await fetch(apiUrl(`/${id}`), {
       method: "DELETE",
     });
-    if (!response.ok) throw new Error("Failed to delete recipe");
+    await assertOk(response, "Failed to delete recipe");
     return response.json();
   },
 
   // Toggle favorite
   toggleFavorite: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/${id}/favorite`, {
+    const response = await fetch(apiUrl(`/${id}/favorite`), {
       method: "PATCH",
     });
-    if (!response.ok) throw new Error("Failed to toggle favorite");
+    await assertOk(response, "Failed to toggle favorite");
     return response.json();
   },
 };
